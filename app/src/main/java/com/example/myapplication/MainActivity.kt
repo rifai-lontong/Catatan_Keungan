@@ -281,7 +281,7 @@ fun AddTransactionScreen(
                 }
                 Button(
                     onClick = { type = "INCOME" },
-                    modifier = Modifier.weight(1fK),
+                    modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (type == "INCOME") Color(0xFF2E7D32) else Color.LightGray
                     )
