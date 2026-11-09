@@ -8,162 +8,92 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.room.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
+import com.example.myapplication.ui.theme.MyApplicationTheme
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
 
-// ==========================================
-// 1. DATA ENTITY & ROOM DATABASE SETUPS
-// ==========================================
-
-enum class TransactionType { PEMASUKAN, PENGELUARAN }
-
-@Entity(tableName = "financial_records")
-data class FinancialRecord(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+// Model Data Transaksi Keuangan
+data class Transaction(
+    val id: Int,
+    val title: String,
     val amount: Double,
-    val date: String,
-    val category: String,
-    val type: TransactionType,
-    val description: String = ""
+    val type: String, // "INCOME" atau "EXPENSE"
+    val date: String
 )
-
-@Dao
-interface FinancialDao {
-    @Query("SELECT * FROM financial_records ORDER BY id DESC")
-    fun getAllRecords(): Flow<List<FinancialRecord>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertRecord(record: FinancialRecord)
-
-    @Delete
-    suspend fun deleteRecord(record: FinancialRecord)
-}
-
-@Database(entities = [FinancialRecord::class], version = 1, exportSchema = false)
-@TypeConverters(Converters::class)
-abstract class AppDatabase : RoomDatabase() {
-    abstract fun financialDao(): FinancialDao
-
-    companion object {
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
-
-        fun getDatabase(context: android.content.Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "financial_database"
-                ).build()
-                INSTANCE = instance
-                instance
-            }
-        }
-    }
-}
-
-class Converters {
-    @TypeConverter
-    fun toTransactionType(value: String): TransactionType = TransactionType.valueOf(value)
-
-    @TypeConverter
-    fun fromTransactionType(type: TransactionType): String = type.name
-}
-
-// ==========================================
-// 2. VIEWMODEL
-// ==========================================
-
-class FinancialViewModel(private val dao: FinancialDao) : ViewModel() {
-    val records: Flow<List<FinancialRecord>> = dao.getAllRecords()
-
-    fun addRecord(amount: Double, date: String, category: String, type: TransactionType) {
-        viewModelScope.launch {
-            dao.insertRecord(
-                FinancialRecord(
-                    amount = amount,
-                    date = date,
-                    category = category,
-                    type = type
-                )
-            )
-        }
-    }
-
-    fun deleteRecord(record: FinancialRecord) {
-        viewModelScope.launch {
-            dao.deleteRecord(record)
-        }
-    }
-}
-
-class FinancialViewModelFactory(private val dao: FinancialDao) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(FinancialViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return FinancialViewModel(dao) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
-    }
-}
-
-// ==========================================
-// 3. MAIN ACTIVITY & UI (JETPACK COMPOSE)
-// ==========================================
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            MyApplicationTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    FinancialTrackerApp()
+                    FinanceAppNavigator()
                 }
             }
         }
     }
 }
 
+@Composable
+fun FinanceAppNavigator() {
+    // State untuk Navigasi Layar: "home" atau "add"
+    var currentScreen by remember { mutableStateOf("home") }
+
+    // State untuk daftar transaksi
+    val transactionList = remember {
+        mutableStateListOf(
+            Transaction(1, "Gaji", 300000.0, "INCOME", "21 Okt 2026"),
+            Transaction(2, "Makanan", 15000.0, "EXPENSE", "21 Okt 2026")
+        )
+    }
+
+    // Navigasi antar layar
+    when (currentScreen) {
+        "home" -> MainScreen(
+            transactions = transactionList,
+            onNavigateToAdd = { currentScreen = "add" },
+            onDeleteTransaction = { transactionList.remove(it) }
+        )
+        "add" -> AddTransactionScreen(
+            onBack = { currentScreen = "home" },
+            onSave = { newTitle, newAmount, newType ->
+                val newId = transactionList.size + 1
+                transactionList.add(0, Transaction(newId, newTitle, newAmount, newType, "21 Okt 2026"))
+                currentScreen = "home"
+            }
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FinancialTrackerApp() {
-    val context = LocalContext.current
-    val database = remember { AppDatabase.getDatabase(context) }
-    val viewModel: FinancialViewModel = viewModel(
-        factory = FinancialViewModelFactory(database.financialDao())
-    )
-
-    val records by viewModel.records.collectAsState(initial = emptyList())
-    var showDialog by remember { mutableStateOf(false) }
-
-    // Hitung Ringkasan
-    val totalIncome = records.filter { it.type == TransactionType.PEMASUKAN }.sumOf { it.amount }
-    val totalExpense = records.filter { it.type == TransactionType.PENGELUARAN }.sumOf { it.amount }
+fun MainScreen(
+    transactions: List<Transaction>,
+    onNavigateToAdd: () -> Unit,
+    onDeleteTransaction: (Transaction) -> Unit
+) {
+    // Hitung total saldo, pemasukan, dan pengeluaran secara interaktif
+    val totalIncome = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+    val totalExpense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
     val totalBalance = totalIncome - totalExpense
 
     Scaffold(
@@ -172,120 +102,73 @@ fun FinancialTrackerApp() {
                 title = { Text("Catatan Keuangan", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    titleContentColor = MaterialTheme.colorScheme.primary
                 )
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showDialog = true },
+                onClick = onNavigateToAdd,
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Tambah Catatan")
+                Icon(Icons.Default.Add, contentDescription = "Tambah Transaksi", tint = Color.White)
             }
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
-                .padding(paddingValues)
                 .fillMaxSize()
+                .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Summary Cards
-            SummarySection(totalBalance, totalIncome, totalExpense)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Riwayat Transaksi",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            // List Transaksi
-            if (records.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Belum ada catatan keuangan.", color = Color.Gray)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(records, key = { it.id }) { record ->
-                        RecordItem(record = record, onDelete = { viewModel.deleteRecord(record) })
-                    }
-                }
-            }
-        }
-
-        // Dialog Tambah Transaksi
-        if (showDialog) {
-            AddRecordDialog(
-                onDismiss = { showDialog = false },
-                onSave = { amount, date, category, type ->
-                    viewModel.addRecord(amount, date, category, type)
-                    showDialog = false
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun SummarySection(balance: Double, income: Double, expense: Double) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Total Saldo", fontSize = 14.sp, color = Color.Gray)
-            Text(
-                text = formatRupiah(balance),
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (balance >= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
+            // Card Saldo Ringkasan
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0EAEF))
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.ArrowUpward,
-                        contentDescription = null,
-                        tint = Color(0xFF2E7D32),
-                        modifier = Modifier.size(20.dp)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Total Saldo", fontSize = 14.sp, color = Color.Gray)
+                    Text(
+                        text = formatRupiah(totalBalance),
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2E7D32)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Column {
-                        Text("Pemasukan", fontSize = 12.sp, color = Color.Gray)
-                        Text(formatRupiah(income), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = Color(0xFF2E7D32))
+                                Text("Pemasukan", fontSize = 12.sp, color = Color.Gray)
+                            }
+                            Text(formatRupiah(totalIncome), fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color(0xFFC62828))
+                                Text("Pengeluaran", fontSize = 12.sp, color = Color.Gray)
+                            }
+                            Text(formatRupiah(totalExpense), fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
+                        }
                     }
                 }
+            }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.ArrowDownward,
-                        contentDescription = null,
-                        tint = Color(0xFFC62828),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Column {
-                        Text("Pengeluaran", fontSize = 12.sp, color = Color.Gray)
-                        Text(formatRupiah(expense), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    }
+            Spacer(modifier = Modifier.height(20.dp))
+            Text("Riwayat Transaksi", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Daftar Riwayat
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(transactions) { item ->
+                    RecordItem(item = item, onDelete = { onDeleteTransaction(item) })
                 }
             }
         }
@@ -293,166 +176,179 @@ fun SummarySection(balance: Double, income: Double, expense: Double) {
 }
 
 @Composable
-fun RecordItem(record: FinancialRecord, onDelete: () -> Unit) {
-    val isIncome = record.type == TransactionType.PEMASUKAN
-    val amountColor = if (isIncome) Color(0xFF2E7D32) else Color(0xFFC62828)
-    val icon = if (isIncome) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
+fun RecordItem(item: Transaction, onDelete: () -> Unit) {
+    val isIncome = item.type == "INCOME"
+    val color = if (isIncome) Color(0xFF2E7D32) else Color(0xFFC62828)
+    val prefix = if (isIncome) "+ " else "- "
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F9F9))
     ) {
         Row(
             modifier = Modifier
                 .padding(12.dp)
                 .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        color = amountColor.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = null, tint = amountColor)
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = record.category, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(text = record.date, fontSize = 12.sp, color = Color.Gray)
-            }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "${if (isIncome) "+" else "-"} ${formatRupiah(record.amount)}",
-                    fontWeight = FontWeight.Bold,
-                    color = amountColor,
-                    fontSize = 14.sp
-                )
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(24.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(color.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Hapus",
-                        tint = Color.LightGray
+                        imageVector = if (isIncome) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = color
                     )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(item.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(item.date, fontSize = 12.sp, color = Color.Gray)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = prefix + formatRupiah(item.amount),
+                    fontWeight = FontWeight.Bold,
+                    color = color,
+                    fontSize = 15.sp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = Color.Gray)
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddRecordDialog(
-    onDismiss: () -> Unit,
-    onSave: (amount: Double, date: String, category: String, type: TransactionType) -> Unit
+fun AddTransactionScreen(
+    onBack: () -> Unit,
+    onSave: (String, Double, String) -> Unit
 ) {
-    var amountText by remember { mutableStateOf("") }
-    var categoryText by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf(TransactionType.PENGELUARAN) }
+    var title by remember { mutableStateOf("") }
+    var amountStr by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf("EXPENSE") } // Default Pengeluaran
 
-    val currentDate = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale("id", "ID")).format(Date())
-    }
+    // State untuk Validasi Input
+    var showError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
 
-    val incomeCategories = listOf("Gaji", "Bonus", "Investasi", "Penjualan", "Lainnya")
-    val expenseCategories = listOf("Makanan", "Transportasi", "Belanja", "Tagihan", "Hiburan", "Lainnya")
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Tambah Catatan") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Selector Tipe Transaksi
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    FilterChip(
-                        selected = selectedType == TransactionType.PENGELUARAN,
-                        onClick = { selectedType = TransactionType.PENGELUARAN },
-                        label = { Text("Pengeluaran") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    FilterChip(
-                        selected = selectedType == TransactionType.PEMASUKAN,
-                        onClick = { selectedType = TransactionType.PEMASUKAN },
-                        label = { Text("Pemasukan") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                // Input Nominal dengan Format Titik Otomatis (misal: 20.000)
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { input ->
-                        val clean = input.replace(Regex("[^\\d]"), "")
-                        amountText = if (clean.isNotEmpty()) {
-                            val parsed = clean.toLongOrNull() ?: 0L
-                            NumberFormat.getNumberInstance(Locale("id", "ID")).format(parsed)
-                        } else {
-                            ""
-                        }
-                    },
-                    label = { Text("Nominal (Rp)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Input / Pilih Kategori
-                Text("Pilih/Ketik Jenis Category:", fontSize = 12.sp, color = Color.Gray)
-                OutlinedTextField(
-                    value = categoryText,
-                    onValueChange = { categoryText = it },
-                    label = { Text("Kategori") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Quick Category Chips
-                val currentCategories = if (selectedType == TransactionType.PEMASUKAN) incomeCategories else expenseCategories
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    currentCategories.take(3).forEach { cat ->
-                        SuggestionChip(
-                            onClick = { categoryText = cat },
-                            label = { Text(cat, fontSize = 10.sp) }
-                        )
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Tambah Transaksi Baru") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Kembali")
                     }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.primary
+                )
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Pilihan Tipe Transaksi
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { type = "EXPENSE" },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (type == "EXPENSE") Color(0xFFC62828) else Color.LightGray
+                    )
+                ) {
+                    Text("Pengeluaran")
+                }
+                Button(
+                    onClick = { type = "INCOME" },
+                    modifier = Modifier.weight(1fK),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (type == "INCOME") Color(0xFF2E7D32) else Color.LightGray
+                    )
+                ) {
+                    Text("Pemasukan")
                 }
             }
-        },
-        confirmButton = {
+
+            // Input Nama Transaksi
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Nama Transaksi (Contoh: Makan, Gaji)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            // Input Nominal Uang
+            OutlinedTextField(
+                value = amountStr,
+                onValueChange = { amountStr = it },
+                label = { Text("Nominal (Rp)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            // Pesan Error Validasi
+            if (showError) {
+                Text(
+                    text = errorMessage,
+                    color = Color.Red,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Tombol Simpan dengan Logika Validasi
             Button(
                 onClick = {
-                    // Membersihkan titik ribuan sebelum disimpan ke database
-                    val cleanString = amountText.replace(Regex("[^\\d]"), "")
-                    val amount = cleanString.toDoubleOrNull() ?: 0.0
-
-                    if (amount > 0 && categoryText.isNotBlank()) {
-                        onSave(amount, currentDate, categoryText, selectedType)
+                    // LOGIKA VALIDASI INPUT (Sesuai Syarat Tugas 2)
+                    if (title.isBlank()) {
+                        showError = true
+                        errorMessage = "Nama transaksi tidak boleh kosong!"
+                    } else if (amountStr.isBlank() || amountStr.toDoubleOrNull() == null || amountStr.toDouble() <= 0.0) {
+                        showError = true
+                        errorMessage = "Masukkan nominal angka yang valid dan lebih dari 0!"
+                    } else {
+                        showError = false
+                        val amount = amountStr.toDouble()
+                        onSave(title, amount, type) // Membawa hasil olahan data kembali ke layar utama
                     }
-                }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
             ) {
-                Text("Simpan")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Batal")
+                Text("Simpan Transaksi", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
-    )
+    }
 }
-fun formatRupiah(number: Double): String {
-    val localeID = Locale("id", "ID")
-    val format = NumberFormat.getCurrencyInstance(localeID)
-    return format.format(number).replace(",00", "")
+
+// Fungsi pembantu format mata uang Rupiah
+fun formatRupiah(amount: Double): String {
+    val format = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
+    return format.format(amount).replace("Rp", "Rp ").substringBefore(",")
 }
