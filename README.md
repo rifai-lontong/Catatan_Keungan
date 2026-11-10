@@ -22,37 +22,21 @@ https://github.com/user-attachments/assets/a67cca0d-5d08-4278-88b1-1e145be4aca6
 
 🚀 Cara Menjalankan Aplikasi (Running the App)
 Untuk menjalankan dan menguji aplikasi Catatan Keuangan ini langsung dari komputer atau perangkatmu, ikuti langkah-langkah berikut:
-
 Prasyarat Sistem:
-Terinstal Android Studio (disarankan versi terbaru yang mendukung Jetpack Compose dan Kotlin).
-
-Perangkat Android fisik (dengan USB Debugging aktif) atau Android Emulator (AVD) yang sudah dikonfigurasi.
-
+•	Terinstal Android Studio (disarankan versi terbaru yang mendukung Jetpack Compose dan Kotlin).
+•	Perangkat Android fisik (dengan USB Debugging aktif) atau Android Emulator (AVD) yang sudah dikonfigurasi.
 Langkah-langkah:
-Clone Repository:
-Clone repository ini ke komputer lokal menggunakan perintah Git atau unduh sebagai ZIP:
-
+1.	Clone Repository: Clone repository ini ke komputer lokal menggunakan perintah Git atau unduh sebagai ZIP:
 Bash
 git clone https://github.com/rifai-lontong/Catatan-Keuangan.git
-Buka Proyek di Android Studio:
-
-Buka Android Studio, pilih Open, lalu arahkan ke folder proyek Catatan Keuangan yang sudah di-clone.
-
-Tunggu proses Gradle Sync selesai hingga semua dependensi terunduh dengan baik.
-
-Hubungkan Perangkat / Emulator:
-
-Sambungkan HP Android fisik via kabel USB ke komputer, atau nyalakan Device Manager di Android Studio untuk menjalankan Emulator.
-
-Jalankan Aplikasi:
-
-Klik tombol Run (ikon segitiga hijau ▶) di bagian atas bilah alat Android Studio (atau tekan Shift + F10 di keyboard).
-
-Tunggu beberapa saat hingga proses build selesai dan aplikasi otomatis terbuka di perangkat atau emulator pilihanmu.
-
-
-
-
+2.	Buka Proyek di Android Studio:
+o	Buka Android Studio, pilih Open, lalu arahkan ke folder proyek Catatan Keuangan yang sudah di-clone.
+o	Tunggu proses Gradle Sync selesai hingga semua dependensi terunduh dengan baik.
+3.	Hubungkan Perangkat / Emulator:
+o	Sambungkan HP Android fisik via kabel USB ke komputer, atau nyalakan Device Manager di Android Studio untuk menjalankan Emulator.
+4.	Jalankan Aplikasi:
+o	Klik tombol Run (ikon segitiga hijau ▶) di bagian atas bilah alat Android Studio (atau tekan Shift + F10 di keyboard).
+o	Tunggu beberapa saat hingga proses build selesai dan aplikasi otomatis terbuka di perangkat atau emulator pilihanmu.
 
 🛠️ Tech Stack:
 Bahasa: Kotlin
